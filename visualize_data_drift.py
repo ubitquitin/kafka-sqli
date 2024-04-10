@@ -81,25 +81,25 @@ plt.grid(True)
 plt.show()
 
 
-#Now, create 1-d representations for statistical tests
+# Now, create 1-d representations for statistical tests
 tsne = TSNE(n_components=1, random_state=42)
 embeddings_tsne = tsne.fit_transform(concatenated_embeddings)
 
-#Separate the t-SNE results for the two sets of embeddings
+# Separate the t-SNE results for the two sets of embeddings
 embeddings1_tsne = embeddings_tsne[:len(embeddings1)]
 embeddings2_tsne = embeddings_tsne[len(embeddings1):]
+
+np.save('embeddings_1d_data', embeddings1_tsne)
+np.save('embeddings_1d_drift', embeddings2_tsne)
 
 embeddings1_tsne = np.load('embeddings_1d_data.npy')
 embeddings2_tsne = np.load('embeddings_1d_drift.npy')
 
-embeddings1_tsne =embeddings1_tsne.squeeze()
+embeddings1_tsne = embeddings1_tsne.squeeze()
 embeddings2_tsne = embeddings2_tsne.squeeze()
 
 embeddings1_tsne = np.asarray(embeddings1_tsne).reshape(1, -1)[0]
 embeddings2_tsne = np.asarray(embeddings2_tsne).reshape(1, -1)[0]
-
-#np.save('embeddings_1d_data', embeddings1_tsne)
-#np.save('embeddings_1d_drift', embeddings2_tsne)
 
 #normalize
 embeddings1_tsne = (embeddings1_tsne - min(embeddings1_tsne))/(max(embeddings1_tsne) - min(embeddings1_tsne))
@@ -115,7 +115,7 @@ ax.legend()
 plt.tight_layout()
 plt.show()
 
-# Replace 0s with a small number to avoid division by zero in KL/PSI calculation
+# # Replace 0s with a small number to avoid division by zero in KL/PSI calculation
 embeddings1_tsne = np.where(embeddings1_tsne == 0, 0.0001, embeddings1_tsne)
 embeddings2_tsne = np.where(embeddings2_tsne == 0, 0.0001, embeddings2_tsne)
 
@@ -137,6 +137,36 @@ KS_test_stat, pval = kstest(embeddings1_tsne, embeddings2_tsne)
 
 if pval < 0.05:
     print(f"The p-value: {pval}, is statistically significant and we can reject the null hypothesis that the two distributions are identical.")
+    print(KS_test_stat)
 
 else:
     print(f"The p-value: {pval}, is NOT statistically significant so we cannot reject the null hypothesis.")
+    print(KS_test_stat)
+
+
+cdf1 = np.sort(embeddings1_tsne)
+p1 = 1. * np.arange(len(embeddings1_tsne)) / (len(embeddings1_tsne) - 1)
+
+cdf2 = np.sort(embeddings2_tsne)
+p2 = 1. * np.arange(len(embeddings2_tsne)) / (len(embeddings2_tsne) - 1)
+
+diff = np.abs(cdf1 - cdf2)
+# Find the maximum difference and its corresponding x-value
+max_diff_idx = np.argmax(diff)
+max_diff_value = diff[max_diff_idx]
+max_diff_x = p1[max_diff_idx]
+
+plt.fill_between(p1, cdf1, cdf2, where=(cdf1 > cdf2), color='gray', alpha=0.3)
+plt.fill_between(p2, cdf1, cdf2, where=(cdf1 <= cdf2), color='gray', alpha=0.3)
+plt.axvline(x=max_diff_x, color='red', linestyle='--')
+
+# Annotate the line with the maximum difference value
+plt.text(max_diff_x + 0.1, (cdf1[max_diff_idx] + cdf2[max_diff_idx]) / 2,
+         f'Max Difference = {max_diff_value:.2f}', color='red')
+
+plt.plot(p1, cdf1, label="CDF orig dataset") 
+plt.plot(p2, cdf2, label="CDF drifted dataset")
+plt.title('KS test CDF of 1d tSNE embeddings')
+plt.legend()
+plt.show()
+
